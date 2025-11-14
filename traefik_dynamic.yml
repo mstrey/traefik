@@ -1,0 +1,14 @@
+http:
+  middlewares:
+    https-only:
+      redirectScheme:
+        scheme: https
+
+    dashboard-auth:
+      basicAuth:
+        users:
+          - '${BASIC_AUTH}'
+
+global:
+  sendAnonymousUsage: true
+
