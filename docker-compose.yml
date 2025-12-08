@@ -6,7 +6,18 @@ volumes:
   traefik_acme:
     name: traefik_acme
 
+
 services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    networks:
+      - frontend
+
   traefik:
     image: "traefik:v3"
     container_name: "traefik"
@@ -14,47 +25,32 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "80:80"
-      - "443:443"
       - "8080:8080"
-    environment:
-      # Carrega variáveis do.env para o ACME Cloudflare
-      - CF_API_EMAIL=${CF_API_EMAIL}
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - traefik_acme:/letsencrypt
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
     networks:
       - frontend
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     command:
       - --api.dashboard=true
       - --log.level=INFO
-      - --accesslog=true
+# para ver mais dados no log, comentar a linha acima e descomentar as 4 abaixo.
+#      - --log.level=DEBUG
+#      - --accesslog=true
+#      - --accesslog.format=json # Formato JSON detalha melhor a duração
+#      - --accesslog.fields.headers.defaultmode=keep # Mostra os headers
       - --providers.docker=true
       - --providers.docker.exposedByDefault=false
-
-      # Configuração do EntryPoint HTTP para Redirecionamento
       - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entryPoints.web.http.redirections.entrypoint.scheme=https
 
-      # Configuração do EntryPoint HTTPS Seguro
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.websecure.asDefault=true
-      - --entrypoints.websecure.http.tls=true
-      - --entrypoints.websecure.http.tls.certresolver=le
-
-      # Configuração do Resolvedor ACME via Cloudflare DNS Challenge
-      - --certificatesresolvers.le.acme.email=${CF_API_EMAIL}
-      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.le.acme.dnschallenge=true
-      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)
-      - traefik.http.routers.dashboard.entrypoints=websecure
-      - traefik.http.routers.dashboard.service=api@internal
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.middlewares=secure-auth"
-      - traefik.http.middlewares.secure-auth.basicauth.users=${BASIC_AUTH}
+      - "traefik.http.middlewares.secure-auth.basicauth.users=${BASIC_AUTH}"

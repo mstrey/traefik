@@ -3,19 +3,16 @@
 Projeto docker para rodar o traefik com gerenciamento DDNS pela Cloudflare e certificados assinados dinamicamente por LetsEncrypt.
 
 Copie o arquivo `.env_example` renomeando para `.env`.  
-Preencha a variável `CF_API_EMAIL` com o email do usuário que gerencia o seu domínio.  
 Preencha a variável `DOMAIN` com o domninio gerenciado pela CloudFlare
 
 # CloudFlare
 
-Acesse o painel de [API Tokens](https://dash.cloudflare.com/profile/api-tokens) e clique em `Create Token`.
+Acesse o painel de [Dashboard de tunnel da CloudFlare](https://one.dash.cloudflare.com) e acesse o menu `Networks >> Connector`.
 
-Preencha  `Permissions` e `Zone Resources` conforme a imagem abaixo:
-![img.png](cloudflare_token.png)
+Na guia `Overview` preencha um nome para o seu tunnel e clique sobre o item `Docker`:
 
-Clique em `Continue to Summary` e depois em `Create Token`.
-Copie o Token de API agora. Ele não será exibido novamente.
-Cole o valor do parametro `CF_DNS_API_TOKEN` do arquivo `.env`.
+Na linha de comando que for exibida copie apenas o token, que é a sequência gigante de caracteres que fica depois do parametro `--token`   
+Cole o valor do parametro `CF_TUNNEL_TOKEN` do arquivo `.env`.
 
 # Senha Dashboard
 
