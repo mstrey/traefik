@@ -56,6 +56,25 @@ services:
       - "traefik.http.routers.dashboard.middlewares=secure-auth"
       - "traefik.http.middlewares.secure-auth.basicauth.users=${BASIC_AUTH}"
 
+  error-pages:
+    image: tarampampam/error-pages:latest
+    container_name: error-pages
+    restart: always
+    networks:
+      - frontend
+    environment:
+      - TEMPLATE_NAME=ghost # Opções: ghost, matrix, lost-in-space, connection, l7-light
+      - SHOW_DETAILS=false  # Esconde detalhes técnicos
+    labels:
+      - "traefik.enable=true"
+      # Regra: Pega QUALQUER host
+      - "traefik.http.routers.catchall.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.catchall.entrypoints=web"
+      # Prioridade: 1 (A Mínima possível).
+      - "traefik.http.routers.catchall.priority=1"
+      - "traefik.http.routers.catchall.service=error-pages"
+      - "traefik.http.services.error-pages.loadbalancer.server.port=8080"
+
   crowdsec:
     image: crowdsecurity/crowdsec:latest
     container_name: crowdsec
