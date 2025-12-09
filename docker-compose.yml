@@ -6,7 +6,6 @@ volumes:
   traefik_acme:
     name: traefik_acme
 
-
 services:
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -30,6 +29,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
+      - "./traefik_logs:/var/log/traefik"
     networks:
       - frontend
     dns:
@@ -37,15 +37,16 @@ services:
       - 8.8.8.8
     command:
       - --api.dashboard=true
-      - --log.level=INFO
-# para ver mais dados no log, comentar a linha acima e descomentar as 4 abaixo.
-#      - --log.level=DEBUG
-#      - --accesslog=true
-#      - --accesslog.format=json # Formato JSON detalha melhor a duração
-#      - --accesslog.fields.headers.defaultmode=keep # Mostra os headers
       - --providers.docker=true
       - --providers.docker.exposedByDefault=false
       - --entrypoints.web.address=:80
+      - --log.level=INFO
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+# para ver mais dados no log, comentar a linha acima e descomentar as 4 abaixo.
+#      - --log.level=DEBUG
+#      - --accesslog.format=json # Formato JSON detalha melhor a duração
+#      - --accesslog.fields.headers.defaultmode=keep # Mostra os headers
 
     labels:
       - "traefik.enable=true"
@@ -54,3 +55,17 @@ services:
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.middlewares=secure-auth"
       - "traefik.http.middlewares.secure-auth.basicauth.users=${BASIC_AUTH}"
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    restart: unless-stopped
+    networks:
+      - frontend
+    environment:
+      - GID=1000
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve # Regras prontas para Traefik
+    volumes:
+      - ./crowdsec-db:/var/lib/crowdsec/data       # Banco de dados persistente
+      - ./crowdsec-config:/etc/crowdsec            # Configurações
+      - ./traefik_logs:/var/log/traefik:ro         # Lê os logs do Traefik (Read Only)

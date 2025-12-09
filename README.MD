@@ -49,6 +49,16 @@ Agora vamos criar uma segunda rota para tratar as demais rotas, assim não será
 - Type: HTTP
 - URL: traefik:80 (Sim, é só o nome do container e a porta. o Docker vai resolver esse nome do container)
 
+## Segurança
+
+No [dashboard da cloudflare](https://dash.cloudflare.com/) acesse o menu `Security > WAF` (Web Application Firewall). Se não achar pesquise por `WAF`.
+
+Crie uma regra "Block Bad Guys":
+- Field: Country
+- Operator: is not in
+- Value: Selecione apenas os países que podem acessar seu site
+- Action: Managed Challenge (Isso pede um captcha se o acesso for suspeito).
+
 ## Limpeza
 
 Agora você pode remover as rotas do tipo `A` (IPv4) e `AAAA` (IPv6). O túnel não usa o seu IP público. Manter esses registros é um risco de segurança desnecessário, pois revela o IP da sua casa para scanners na internet.
