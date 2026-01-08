@@ -11,6 +11,10 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
@@ -21,6 +25,10 @@ services:
     image: "traefik:v3"
     container_name: "traefik"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
     security_opt:
       - no-new-privileges:true
     ports:
@@ -76,6 +84,10 @@ services:
     image: tarampampam/error-pages:latest
     container_name: error-pages
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
     networks:
       - frontend
     environment:
@@ -95,6 +107,10 @@ services:
     image: crowdsecurity/crowdsec:latest
     container_name: crowdsec
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
     networks:
       - frontend
     healthcheck:
