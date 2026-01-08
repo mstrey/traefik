@@ -32,17 +32,23 @@ services:
       - "./traefik_logs:/var/log/traefik"
     networks:
       - frontend
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
+    healthcheck:
+      test: [ "CMD", "traefik", "healthcheck", "--ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     command:
-      - --api.dashboard=true
-      - --providers.docker=true
-      - --providers.docker.exposedByDefault=false
-      - --entrypoints.web.address=:80
-      - --log.level=INFO
-      - --accesslog=true
-      - --accesslog.filepath=/var/log/traefik/access.log
+      - "--ping=true" # <--- 1. NECESSÁRIO PARA O HEALTHCHECK
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--experimental.plugins.bouncer.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      - "--experimental.plugins.bouncer.version=v1.4.6"
 # para ver mais dados no log, comentar a linha acima e descomentar as 4 abaixo.
 #      - --log.level=DEBUG
 #      - --accesslog.format=json # Formato JSON detalha melhor a duração
@@ -53,8 +59,18 @@ services:
       - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
       - "traefik.http.routers.dashboard.entrypoints=web"
       - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=secure-auth"
+      - "traefik.http.routers.dashboard.middlewares=secure-auth,crowdsec-check"
+      # Middleware de autenticação
       - "traefik.http.middlewares.secure-auth.basicauth.users=${BASIC_AUTH}"
+      # Repassa para todos os serviços informação de acesso por HTTPS
+      - "traefik.http.middlewares.ssl-header.headers.customrequestheaders.X-Forwarded-Proto=https"
+      # Middleware do bouncer crowdsec
+      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.enabled=true"
+      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.updateIntervalSeconds=60"
+      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.crowdseclapischeme=http"
+      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.crowdseclapihost=crowdsec:8080"
+      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.crowdseclapikey=${TOKEN_BOUNCER}"
+
 
   error-pages:
     image: tarampampam/error-pages:latest
@@ -63,8 +79,8 @@ services:
     networks:
       - frontend
     environment:
-      - TEMPLATE_NAME=ghost # Opções: ghost, matrix, lost-in-space, connection, l7-light
-      - SHOW_DETAILS=false  # Esconde detalhes técnicos
+      - TEMPLATE_NAME=lost-in-space # Opções: ghost, matrix, lost-in-space, connection, l7-light
+      - SHOW_DETAILS=false
     labels:
       - "traefik.enable=true"
       # Regra: Pega QUALQUER host
@@ -81,8 +97,15 @@ services:
     restart: unless-stopped
     networks:
       - frontend
+    healthcheck:
+      test: [ "CMD", "cscli", "lapi", "status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     environment:
       - GID=1000
+      - BOUNCER_KEY_TRAEFIK=${TOKEN_BOUNCER}
       - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve # Regras prontas para Traefik
     volumes:
       - ./crowdsec-db:/var/lib/crowdsec/data       # Banco de dados persistente
