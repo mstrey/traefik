@@ -15,6 +15,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
+          memory: 256M
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
@@ -29,6 +30,7 @@ services:
       resources:
         limits:
           cpus: "2.0"    # Traefik precisa processar requests rápido
+          memory: 512M
     security_opt:
       - no-new-privileges:true
     ports:
@@ -88,6 +90,7 @@ services:
       resources:
         limits:
           cpus: "0.1"
+          memory: 64M
     networks:
       - frontend
     environment:
@@ -111,6 +114,7 @@ services:
       resources:
         limits:
           cpus: "0.75"
+          memory: 512M
     networks:
       - frontend
     healthcheck:
