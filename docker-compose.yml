@@ -110,7 +110,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "2.0"    # Traefik precisa processar requests rápido
+          memory: 512M
     networks:
       - frontend
     healthcheck:
