@@ -19,6 +19,7 @@ services:
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+      - TUNNEL_TRANSPORT_PROTOCOL=http2
     networks:
       - frontend
 
@@ -72,17 +73,11 @@ services:
       - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
       - "traefik.http.routers.dashboard.entrypoints=web"
       - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=secure-auth,crowdsec-check"
+      - "traefik.http.routers.dashboard.middlewares=secure-auth"
       # Middleware de autenticação
       - "traefik.http.middlewares.secure-auth.basicauth.users=${BASIC_AUTH}"
       # Repassa para todos os serviços informação de acesso por HTTPS
       - "traefik.http.middlewares.ssl-header.headers.customrequestheaders.X-Forwarded-Proto=https"
-      # Middleware do bouncer crowdsec
-      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.enabled=true"
-      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.updateIntervalSeconds=60"
-      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.crowdseclapischeme=http"
-      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.crowdseclapihost=crowdsec:8080"
-      - "traefik.http.middlewares.crowdsec-check.plugin.bouncer.crowdseclapikey=${TOKEN_BOUNCER}"
 
 
   error-pages:
