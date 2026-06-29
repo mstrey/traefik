@@ -1,5 +1,9 @@
 .env
+.env.*
+
 .idea
 crowdsec-config
 crowdsec-db
 traefik_logs
+
+homarr/

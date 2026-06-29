@@ -5,6 +5,12 @@ networks:
 volumes:
   traefik_acme:
     name: traefik_acme
+  netdataconfig:
+    name: netdataconfig
+  netdatalib:
+    name: netdatalib
+  netdatacache:
+    name: netdatacache
 
 services:
   cloudflared:
@@ -70,12 +76,14 @@ services:
 
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik-${SUBDOMAIN}.${DOMAIN}`)"
       - "traefik.http.routers.dashboard.entrypoints=web"
       - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=secure-auth"
+      - "traefik.http.routers.dashboard.middlewares=secure-auth,dashboard-redirect"
       # Middleware de autenticação
       - "traefik.http.middlewares.secure-auth.basicauth.users=${BASIC_AUTH}"
+      - "traefik.http.middlewares.dashboard-redirect.redirectregex.regex=^https?://([^/]+)/?$$"
+      - "traefik.http.middlewares.dashboard-redirect.redirectregex.replacement=https://$${1}/dashboard/"
       # Repassa para todos os serviços informação de acesso por HTTPS
       - "traefik.http.middlewares.ssl-header.headers.customrequestheaders.X-Forwarded-Proto=https"
 
@@ -104,7 +112,7 @@ services:
       - "traefik.http.routers.catchall.service=error-pages"
       - "traefik.http.services.error-pages.loadbalancer.server.port=8080"
 
-  crowdsec:
+  crowdsec: # avaliar centralização com LAPI Server no futuro para aumentar a segurança com multi-sites
     image: crowdsecurity/crowdsec:latest
     container_name: crowdsec
     restart: unless-stopped
@@ -129,3 +137,75 @@ services:
       - ./crowdsec-db:/var/lib/crowdsec/data       # Banco de dados persistente
       - ./crowdsec-config:/etc/crowdsec            # Configurações
       - ./traefik_logs:/var/log/traefik:ro         # Lê os logs do Traefik (Read Only)
+
+  homarr:
+    image: ghcr.io/ajnart/homarr:latest
+    container_name: homarr
+    restart: unless-stopped
+    networks:
+      - frontend
+    volumes:
+      - ./homarr/configs:/app/data/configs
+      - ./homarr/icons:/app/public/icons
+      - ./homarr/data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:7575/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homarr.rule=Host(`dashboard-${SUBDOMAIN}.${DOMAIN}`)"
+      - "traefik.http.routers.homarr.entrypoints=web"
+      - "traefik.http.services.homarr.loadbalancer.server.port=7575"
+  netdata:
+    image: netdata/netdata:latest
+    container_name: netdata
+    restart: unless-stopped
+    hostname: ${NODE_NAME}
+    pid: host
+    networks:
+      - frontend
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - netdataconfig:/etc/netdata
+      - netdatalib:/var/lib/netdata
+      - netdatacache:/var/cache/netdata
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOCKER_USR=root
+      - DO_NOT_TRACK=1 # Desativa telemetria para economizar rede/processamento
+      - NETDATA_UPDATE_EVERY=60 # CRÍTICO: Muda coleta de 1s para 60s (salva I/O e CPU)
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-f", "http://127.0.0.1:19999/api/v1/info"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.netdata.rule=Host(`netdata-${SUBDOMAIN}.${DOMAIN}`)"
+      - "traefik.http.routers.netdata.entrypoints=web"
+      - "traefik.http.services.netdata.loadbalancer.server.port=19999"
+
+  
