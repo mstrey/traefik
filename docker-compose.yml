@@ -138,32 +138,29 @@ services:
       - ./crowdsec-config:/etc/crowdsec            # Configurações
       - ./traefik_logs:/var/log/traefik:ro         # Lê os logs do Traefik (Read Only)
 
-  homarr:
-    image: ghcr.io/ajnart/homarr:latest
-    container_name: homarr
+  homer:
+    image: b4bz/homer:latest
+    container_name: homer
     restart: unless-stopped
     networks:
       - frontend
     volumes:
-      - ./homarr/configs:/app/data/configs
-      - ./homarr/icons:/app/public/icons
-      - ./homarr/data:/data
+      - ./homer:/www/assets
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.2"
+          memory: 64M
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:7575/"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8080/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 15s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.homarr.rule=Host(`dashboard-${SUBDOMAIN}.${DOMAIN}`)"
-      - "traefik.http.routers.homarr.entrypoints=web"
-      - "traefik.http.services.homarr.loadbalancer.server.port=7575"
+      - "traefik.http.routers.homer.rule=Host(`home-${SUBDOMAIN}.${DOMAIN}`)"
+      - "traefik.http.routers.homer.entrypoints=web"
+      - "traefik.http.services.homer.loadbalancer.server.port=8080"
   netdata:
     image: netdata/netdata:latest
     container_name: netdata
