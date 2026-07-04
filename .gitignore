@@ -6,4 +6,4 @@ crowdsec-config
 crowdsec-db
 traefik_logs
 
-homer/
+homer/config.yml
