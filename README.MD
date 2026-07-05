@@ -1,70 +1,136 @@
 # Traefik
 
-Projeto docker para rodar o traefik com gerenciamento DDNS pela Cloudflare e certificados assinados dinamicamente por LetsEncrypt.
+Projeto docker para rodar o traefik com gerenciamento DDNS e certificados pela Cloudflare.
 
-Copie o arquivo `.env_example` renomeando para `.env`.  
-Preencha a variável `DOMAIN` com o domninio gerenciado pela CloudFlare
+## 🚀 Componentes da Stack
+Fazem parte da solução de gerenciamento os seguintes serviços:
 
-# Senha Dashboard
+- **Cloudflared**: Cria um túnel seguro (Zero Trust) direto para a nuvem da Cloudflare, dispensando a abertura de portas no roteador local.
 
-Execute o comando abaixo no prompt para gerar o hash de sua senha que será utilizada para acessar o dashboard do Traefik.
-Esse resultado deve ser colado na variável `BASIC_AUTH` do arquivo .env.
+- **Traefik v3**: Proxy reverso que intercepta o tráfego do túnel e distribui para os containers corretos, gerenciando autenticação e redirecionamentos.
 
-No retorno do método altere a string dobrando as 3 ocorrências de `$`. Exemplo:
+- **Crowdsec**: Sistema de Prevenção de Intrusão (IPS) colaborativo que analisa os logs do Traefik em tempo real e bloqueia ataques.
+
+- **Error Pages**: Servidor super leve para exibir páginas de erro amigáveis caso um container esteja offline.
+
+- **Homer**: Dashboard estático, rápido e de baixíssimo consumo para centralizar os links de acesso da sua infraestrutura local.
+
+- **Netdata**: Agente de monitoramento em tempo real (APM) para análise profunda de saúde do hardware e dos containers.
+
+# 📋 1. Preparação do ambiente 
+Copie o arquivo de exemplo para criar o seu arquivo de variáveis de ambiente:
+
+```bash
+cp .env_example .env
+```
+
+Abra o arquivo `.env` e preencha as configurações do nó:
+
+- NODE_NAME: Nome de identificação do servidor que será gerenciado (ex: `poa-rasp`).
+
+- DOMAIN: Seu domínio principal gerenciado pela Cloudflare (ex: dominio.com).
+
+SUBDOMAIN: O identificador deste nó (ex: spo, poa).
+
+(Os URLs gerados seguirão o padrão servico-subdominio.dominio, ex: traefik-poa.dominio.com, para garantir a compatibilidade com o SSL Universal da Cloudflare).
+
+# 🔐 2. Geração de Credenciais
+
+## Senha do Dashboard (BASIC_AUTH)
+
+O Traefik exige uma autenticação para os painéis gerenciais. Gere o hash da sua senha executando:
 
 ```
 htpasswd -nb admin sua_senha
 admin:$apr1$USMRR8qF$DHzFT0lhzmO46CkBh9DaS1
 ```
-
-O valor que deve ser colado no arquivo `.env` é:
+Importante: No resultado gerado, você deve dobrar todas as ocorrências do caractere `$`.
+No exemplo retornado acima, o valor que deve ser colado no arquivo `.env` é:
 
 `BASIC_AUTH=admin:$$apr1$$USMRR8qF$$DHzFT0lhzmO46CkBh9DaS1`
 
-# CloudFlare
+## Token do Cloudflare Tunnel
 
-## Token
-Acesse o painel de [Dashboard de tunnel da CloudFlare](https://one.dash.cloudflare.com) e acesse o menu `Networks >> Connector`.
+1. Acesse o [Dashboard da CloudFlare](https://one.dash.cloudflare.com) e acesse o menu `Networks >> Connector`.
+2. Clique em `Create` e na guia `Overview` preencha um nome para o seu tunnel. Exemplo: `my-homelab`
+3. Clique sobre o item `Docker` e na linha de comando que for exibida copie apenas o token, que é a sequência gigante de caracteres que fica depois do parametro `--token`   
+4. Cole o valor no parametro `CF_TUNNEL_TOKEN` do arquivo `.env`.
 
-Clique em `Create` e na guia `Overview` preencha um nome para o seu tunnel. Exemplo: `my-homelab`
+## Token do Crowdsec (Bouncer)
 
-Clique sobre o item `Docker` e na linha de comando que for exibida copie apenas o token, que é a sequência gigante de caracteres que fica depois do parametro `--token`   
-Cole o valor no parametro `CF_TUNNEL_TOKEN` do arquivo `.env`.
+Como o Traefik depende do Crowdsec para validar os acessos, precisamos gerar o token do bouncer antes de subir a stack completa.
 
-## Roteamento
+Inicie apenas o container do Crowdsec:
 
-Primeiro vamos criar a rota principal, que vai conectar o traefik. Na guia `Published application routes` clique em `Add a published application route` para criar uma nova rota e informe os seguintes valores:   
+```bash 
+docker compose up -d crowdsec
+```
 
-- Subdomain: traefik
-- Domain: escolha o seu domínio
-- Path: deixe em branco
-- Type: HTTP
-- URL: traefik:80 (Sim, é só o nome do container e a porta. o Docker vai resolver esse nome do container)
+Aguarde alguns segundos e gere o token:
 
-Agora vamos criar uma segunda rota para tratar as demais rotas, assim não será necessário criar uma rota para cada serviço:
+```bash 
+docker exec -t crowdsec cscli bouncers add traefik-bouncer
+```
 
-- Subdomain: *
-- Domain: escolha o seu domínio
-- Path: deixe em branco
-- Type: HTTP
-- URL: traefik:80 (Sim, é só o nome do container e a porta. o Docker vai resolver esse nome do container)
+Copie o token retornado e cole na variável `TOKEN_BOUNCER` no arquivo `.env`.
 
-## Segurança
+# 📦 3. Execução
 
-No [dashboard da cloudflare](https://dash.cloudflare.com/) acesse o menu `Security > WAF` (Web Application Firewall). Se não achar pesquise por `WAF`.
+Com o .env devidamente preenchido e todos os tokens configurados, inicie toda a infraestrutura:
 
+```bash
+docker compose up -d
+```
+
+# 🌐 4. Roteamento na Cloudflare
+
+No [Painel Zero Trust](https://one.dash.cloudflare.com/), vá até a configuração do seu túnel e acesse a aba Public Hostname. Adicione as rotas apontando para o serviço interno http://traefik:80.
+
+Crie as rotas para os serviços nativos deste nó (substitua poa pelo seu SUBDOMAIN):
+
+traefik-poa.strey.net.br ➔ http://traefik:80
+
+home-poa.strey.net.br ➔ http://traefik:80
+
+netdata-poa.strey.net.br ➔ http://traefik:80
+
+Para qualquer novo sistema que você adicionar futuramente neste servidor e mapear no Traefik, basta criar uma nova rota com o respectivo subdomínio apontando para o mesmo http://traefik:80.
+
+# 🖥️ 5. Configurando o Dashboard (Homer)
+
+O Homer é um dashboard estático gerenciado via código (IaC). Ao rodar a stack pela primeira vez, uma pasta homer será criada no repositório local.
+
+Para adicionar seus links, copie o arquivo `homer/config_example.yml` para `homer/config.yml` e edite as urls para o seu subdominio e dominio. 
+
+As alterações no config.yml refletem instantaneamente no navegador ao atualizar a página, sem necessidade de reiniciar o container.
+
+# 🛡️ 6. Segurança e Limpeza
+
+## WAF da Cloudflare
+
+Para aumentar a segurança global, acesse o [Dashboard da Cloudflare](https://dash.cloudflare.com/) e acesse o menu `Security > WAF`.
 Crie uma regra "Block Bad Guys":
-- Field: Country
-- Operator: is not in
-- Value: Selecione apenas os países que podem acessar seu site
-- Action: Managed Challenge (Isso pede um captcha se o acesso for suspeito).
+
+Field: Country
+
+Operator: is not in
+
+Value: Selecione apenas os países de onde você acessa sua infraestrutura (ex: Brazil).
+
+Action: Managed Challenge (Apresenta um desafio invisível ou CAPTCHA para acessos estrangeiros).
 
 ## Limpeza
 
 Agora você pode remover as rotas do tipo `A` (IPv4) e `AAAA` (IPv6). O túnel não usa o seu IP público. Manter esses registros é um risco de segurança desnecessário, pois revela o IP da sua casa para scanners na internet.
 
-## Throwable shooting
+# 🚑 Troubleshooting (Resolução de Problemas)
 
-Caso as rotas adicionais não estejam funcionando, reveja as rotas de DNS. Acesse o [dashboard da cloudflare](https://dash.cloudflare.com/), acesse o seu domínio e vá no menu `DNS > Records`.
+- **Erro `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` no navegador**:
+Isso ocorre se você tentar usar uma URL de 4º nível (ex: `traefik.poa.dominio.com`). O SSL gratuito da Cloudflare só cobre até o 3º nível (`*.dominio.com`). Mantenha o padrão com hífen (`traefik-poa.dominio.com`).
 
-Procure a rota `CNAME` do traefik e copie o valor de `content` para a rota `CNAME` de `*`.
+- **O serviço não aparece no Traefik**:
+Verifique se o container do serviço está conectado à rede externa frontend no seu respectivo docker-compose.yml. Caso seu container utilize mais de uma rede você deve especificar nas labels qual a rede que o traefik deve utilizar:
+
+```yml 
+      - "traefik.docker.network=frontend"
+```
