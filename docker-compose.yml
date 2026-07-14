@@ -50,11 +50,11 @@ services:
     networks:
       - frontend
     healthcheck:
-      test: [ "CMD", "traefik", "healthcheck", "--ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
     depends_on:
       crowdsec:
         condition: service_started
@@ -125,10 +125,10 @@ services:
       - frontend
     healthcheck:
       test: [ "CMD", "cscli", "lapi", "status" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+      interval: 60s
+      timeout: 20s
+      retries: 5
+      start_period: 45s
     environment:
       - GID=1000
       - BOUNCER_KEY_TRAEFIK=${TOKEN_BOUNCER}
