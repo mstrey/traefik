@@ -100,7 +100,7 @@ services:
     networks:
       - frontend
     environment:
-      - TEMPLATE_NAME=lost-in-space # Opções: ghost, matrix, lost-in-space, connection, l7-light
+      - TEMPLATE_NAME=${ERROR_PAGE:-lost-in-space}
       - SHOW_DETAILS=false
     labels:
       - "traefik.enable=true"
